@@ -6,14 +6,19 @@
     <title>复古电脑备忘录</title>
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Inter 字体 (作为主体 fallback) 和 VT323 字体 (用于屏幕英文) -->
+    <!-- 引入 Inter 字体和 VT323 字体 -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=VT323&family=Noto+Sans+SC:wght@700&display=swap" rel="stylesheet">
     
     <script type="module">
+        /**
+         * 纯本地内存存储版本
+         * 修复了全选状态下无法删除的问题
+         * 修复了中文输入法和空格双重输入问题
+         */
+
         // --- 全局变量和内存存储 ---
-        let localMemos = []; // 用于在内存中存储所有备忘录
+        let localMemos = []; 
         let activeMemoId = null;
-        let userId = "local-user"; // 模拟 ID
         const appId = "retro-memo-local";
 
         // --- DOM 元素缓存 ---
@@ -30,20 +35,16 @@
         const confirmYesButton = document.getElementById('confirm-yes');
         const confirmNoButton = document.getElementById('confirm-no');
         
-        // 键盘按键代码映射
         const KEY_MAP = {
             'Backquote': 'Key_Backquote', 'Digit1': 'Key_1', 'Digit2': 'Key_2', 'Digit3': 'Key_3', 'Digit4': 'Key_4',
             'Digit5': 'Key_5', 'Digit6': 'Key_6', 'Digit7': 'Key_7', 'Digit8': 'Key_8', 'Digit9': 'Key_9',
             'Digit0': 'Key_0', 'Minus': 'Key_Minus', 'Equal': 'Key_Equal', 'Backspace': 'Key_BACK', 'Enter': 'Key_ENTER',
-            
             'Tab': 'Key_TAB', 'KeyQ': 'Key_Q', 'KeyW': 'Key_W', 'KeyE': 'Key_E', 'KeyR': 'Key_R',
             'KeyT': 'Key_T', 'KeyY': 'Key_Y', 'KeyU': 'Key_U', 'KeyI': 'Key_I', 'KeyO': 'Key_O',
             'KeyP': 'Key_P', 'BracketLeft': 'Key_BracketLeft', 'BracketRight': 'Key_BracketRight', 'Backslash': 'Key_Backslash',
-            
             'ShiftLeft': 'Key_SHIFT_L', 'KeyA': 'Key_A', 'KeyS': 'Key_S', 'KeyD': 'Key_D', 'KeyF': 'Key_F',
             'KeyG': 'Key_G', 'KeyH': 'Key_H', 'KeyJ': 'Key_J', 'KeyK': 'Key_K', 'KeyL': 'Key_L',
             'Semicolon': 'Key_Semicolon', 'Quote': 'Key_Quote', 'ShiftRight': 'Key_SHIFT_R',
-
             'ControlLeft': 'Key_CTRL_L', 'AltLeft': 'Key_ALT_L', 'KeyZ': 'Key_Z', 'KeyX': 'Key_X', 
             'KeyC': 'Key_C', 'KeyV': 'Key_V', 'KeyB': 'Key_B', 'KeyN': 'Key_N', 'KeyM': 'Key_M',
             'Comma': 'Key_Comma', 'Period': 'Key_Period', 'Slash': 'Key_Slash', 
@@ -58,17 +59,14 @@
                 setStatus("请先在备忘录视图中编辑内容。");
                 return;
             }
-
             const content = textarea.value;
             const title = memoTitleInput().value;
-
             try {
                 const now = new Date();
                 const TIMESTAMP = now.toLocaleString('zh-CN', {
                         year: 'numeric', month: '2-digit', day: '2-digit',
                         hour: '2-digit', minute: '2-digit', hour12: false
                     }).replace(/\//g, '-').replace(',', '');
-
                 const CANVAS_WIDTH = 800;
                 const LINE_HEIGHT = 30;
                 const PADDING = 30;
@@ -78,15 +76,12 @@
                 const BACKGROUND_COLOR = '#011717'; 
                 const BORDER_THICKNESS = 2; 
                 const BORDER_COLOR = '#40E0D0'; 
-
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 ctx.font = `700 ${FONT_SIZE} ${FONT_FAMILY}`;
-                
                 const MAX_CHARS_PER_LINE = 33; 
                 let lines = [];
                 const rawLines = content.split('\n');
-
                 for (const rawLine of rawLines) {
                     if (rawLine === '') { lines.push(''); continue; }
                     let start = 0;
@@ -96,32 +91,24 @@
                         start = end;
                     }
                 }
-
                 const CANVAS_HEIGHT = lines.length * LINE_HEIGHT + PADDING * 2 + LINE_HEIGHT * 2;
                 canvas.width = CANVAS_WIDTH;
                 canvas.height = CANVAS_HEIGHT;
-
                 ctx.fillStyle = BACKGROUND_COLOR; 
                 ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; 
-                for (let i = 0; i < CANVAS_HEIGHT; i += 3) {
-                    ctx.fillRect(0, i + 1, CANVAS_WIDTH, 2); 
-                }
-
+                for (let i = 0; i < CANVAS_HEIGHT; i += 3) { ctx.fillRect(0, i + 1, CANVAS_WIDTH, 2); }
                 ctx.font = `700 24px ${FONT_FAMILY}`;
                 ctx.fillStyle = TEXT_COLOR; 
                 ctx.shadowColor = 'rgba(64, 224, 208, 0.8)';
                 ctx.shadowBlur = 2;
                 ctx.fillText(`>>> ${title} <<<`, PADDING, PADDING + LINE_HEIGHT * 0.75);
-                
                 ctx.shadowBlur = 0;
                 ctx.strokeStyle = '#00CED1';
                 ctx.beginPath();
                 ctx.moveTo(PADDING, PADDING + LINE_HEIGHT + 5);
                 ctx.lineTo(CANVAS_WIDTH - PADDING, PADDING + LINE_HEIGHT + 5);
                 ctx.stroke();
-
                 ctx.font = `700 ${FONT_SIZE} ${FONT_FAMILY}`;
                 ctx.fillStyle = TEXT_COLOR; 
                 let y = PADDING + LINE_HEIGHT * 2 + 10;
@@ -132,11 +119,9 @@
                     ctx.shadowBlur = 0;
                     y += LINE_HEIGHT;
                 }
-                
-                const TIMESTAMP_FONT_SIZE = '20px'; 
                 const TIMESTAMP_Y = CANVAS_HEIGHT - PADDING;
                 const TIMESTAMP_X = CANVAS_WIDTH - PADDING;
-                ctx.font = `700 ${TIMESTAMP_FONT_SIZE} ${FONT_FAMILY}`; 
+                ctx.font = `700 20px ${FONT_FAMILY}`; 
                 ctx.fillStyle = TEXT_COLOR; 
                 ctx.shadowColor = 'rgba(64, 224, 208, 1)';
                 ctx.shadowBlur = 3;
@@ -144,7 +129,6 @@
                 ctx.fillText(TIMESTAMP, TIMESTAMP_X, TIMESTAMP_Y);
                 ctx.shadowBlur = 0;
                 ctx.textAlign = 'left';
-
                 ctx.shadowColor = 'rgba(64, 224, 208, 0.7)';
                 ctx.shadowBlur = 10;
                 ctx.save();
@@ -156,12 +140,10 @@
                 ctx.lineWidth = BORDER_THICKNESS * 2;
                 ctx.strokeRect(1, 1, CANVAS_WIDTH - 2, CANVAS_HEIGHT - 2); 
                 ctx.restore(); 
-                
                 ctx.shadowBlur = 0;
                 ctx.lineWidth = BORDER_THICKNESS;
                 ctx.strokeStyle = BORDER_COLOR;
                 ctx.strokeRect(BORDER_THICKNESS / 2, BORDER_THICKNESS / 2, CANVAS_WIDTH - BORDER_THICKNESS, CANVAS_HEIGHT - BORDER_THICKNESS);
-                
                 const imageURL = canvas.toDataURL('image/png');
                 const downloadLink = document.createElement('a');
                 downloadLink.href = imageURL;
@@ -218,7 +200,11 @@
             let newCursorPosition = start;
 
             if (char === 'BACK') {
-                if (start > 0) {
+                // 修复：如果选中了范围，删除该范围；否则删除光标前的一个字符
+                if (start !== end) {
+                    newValue = value.substring(0, start) + value.substring(end);
+                    newCursorPosition = start;
+                } else if (start > 0) {
                     newValue = value.substring(0, start - 1) + value.substring(end);
                     newCursorPosition = start - 1;
                 } else return;
@@ -243,54 +229,46 @@
         };
         
         const handleKeyDown = (event) => {
-            if (event.repeat) return;
+            if (event.isComposing || event.keyCode === 229) return;
             const virtualKeyId = KEY_MAP[event.code];
             const contentTextarea = memoContentTextarea();
             const titleInput = memoTitleInput();
             const activeElement = document.activeElement;
-
             if (virtualKeyId) {
                 const virtualKey = document.getElementById(virtualKeyId);
                 if (virtualKey) virtualKey.classList.add('key-pressed');
                 const isContentFocused = activeElement === contentTextarea;
                 const isTitleFocused = activeElement === titleInput;
-                const criticalActionKeys = ['Backspace', 'Enter', 'Tab', 'Space', 'PrintScreen'];
-                const isCriticalAction = criticalActionKeys.includes(event.code);
-                
-                if (isContentFocused && isCriticalAction) { 
-                    if (event.code !== 'Space') event.preventDefault();
-                } else if (isTitleFocused && (event.code === 'Enter' || event.code === 'Tab' || event.code === 'Backspace')) {
+                const overrideKeys = ['Backspace', 'Enter', 'Tab', 'PrintScreen'];
+                const shouldOverride = overrideKeys.includes(event.code);
+                if (isContentFocused && shouldOverride) { 
                     event.preventDefault();
-                } else if (event.code === 'PrintScreen') {
-                     event.preventDefault();
-                }
-
-                let charToType = event.key;
-                if (event.code === 'Backspace') charToType = 'BACK';
-                else if (event.code === 'Enter') charToType = 'ENTER';
-                else if (event.code === 'Tab') charToType = 'TAB';
-                else if (event.code === 'Space') charToType = ' ';
-                else if (event.code === 'PrintScreen') charToType = 'PRINT';
-                
-                const isTypeKeyAction = ['BACK', 'ENTER', 'TAB', 'PRINT', ' '].includes(charToType);
-                if (isContentFocused) {
-                    if (isTypeKeyAction) window.typeKey(charToType);
-                } else if (isTitleFocused) {
-                    if (charToType === 'PRINT') window.typeKey('PRINT');
-                    else if (isCriticalAction) {
-                        if (event.code === 'Backspace') {
-                            const start = titleInput.selectionStart;
-                            const end = titleInput.selectionEnd;
-                            const value = titleInput.value;
-                            if (start > 0) {
-                                titleInput.value = value.substring(0, start - 1) + value.substring(end);
-                                titleInput.selectionStart = titleInput.selectionEnd = start - 1;
-                                debouncedSaveMemo();
-                            }
+                    let charToType = '';
+                    if (event.code === 'Backspace') charToType = 'BACK';
+                    else if (event.code === 'Enter') charToType = 'ENTER';
+                    else if (event.code === 'Tab') charToType = 'TAB';
+                    else if (event.code === 'PrintScreen') charToType = 'PRINT';
+                    if (charToType) window.typeKey(charToType);
+                } else if (isTitleFocused && shouldOverride) {
+                    event.preventDefault();
+                    if (event.code === 'Backspace') {
+                        const start = titleInput.selectionStart;
+                        const end = titleInput.selectionEnd;
+                        const value = titleInput.value;
+                        // 修复：标题输入框也支持范围删除
+                        if (start !== end) {
+                            titleInput.value = value.substring(0, start) + value.substring(end);
+                            titleInput.selectionStart = titleInput.selectionEnd = start;
+                            debouncedSaveMemo();
+                        } else if (start > 0) {
+                            titleInput.value = value.substring(0, start - 1) + value.substring(start);
+                            titleInput.selectionStart = titleInput.selectionEnd = start - 1;
+                            debouncedSaveMemo();
                         }
                     }
-                } else if (charToType === 'PRINT') {
-                    window.typeKey('PRINT');
+                } else if (event.code === 'PrintScreen') {
+                     event.preventDefault();
+                     window.exportMemoAsImage();
                 }
             }
         };
@@ -303,16 +281,14 @@
             }
         };
 
-        // --- 初始化 (无云端版) ---
         const initApp = () => {
-            setStatus("本地模式就绪。");
+            setStatus("本地模式已就绪 (输入优化已应用)。");
             fetchMemoList(true); 
             initEventListeners();
             document.addEventListener('keydown', handleKeyDown);
             document.addEventListener('keyup', handleKeyUp);
         };
         
-        // --- 内存数据操作 (代替 Firestore) ---
         const saveMemo = (content, title) => {
             const index = localMemos.findIndex(m => m.id === activeMemoId);
             const data = { 
@@ -321,12 +297,8 @@
                 title: title || '未命名备忘录', 
                 updated_at: new Date() 
             };
-            if (index > -1) {
-                localMemos[index] = data;
-            } else {
-                localMemos.push(data);
-            }
-            setStatus(`[${data.title}] 已更新。`);
+            if (index > -1) { localMemos[index] = data; } else { localMemos.push(data); }
+            setStatus(`[${data.title}] 已本地更新。`);
         };
 
         const debouncedSaveMemo = debounce(() => {
@@ -342,7 +314,6 @@
             const memo = localMemos.find(m => m.id === memoId);
             const finalTitle = memo ? memo.title : title;
             const finalContent = memo ? memo.content : content;
-
             const titleInput = memoTitleInput();
             const contentTextarea = memoContentTextarea();
             if (titleInput && contentTextarea) {
@@ -364,9 +335,7 @@
                     if (activeMemoId === memoId) {
                         activeMemoId = null; 
                         fetchMemoList(true);
-                    } else {
-                        fetchMemoList();
-                    }
+                    } else fetchMemoList();
                 }
             });
         };
@@ -375,8 +344,7 @@
             const newId = crypto.randomUUID();
             const defaultTitle = `新备忘录 ${new Date().toLocaleTimeString('zh-CN')}`;
             const defaultContent = "请在此输入文本...";
-            const newMemoObj = { id: newId, title: defaultTitle, content: defaultContent, updated_at: new Date() };
-            localMemos.push(newMemoObj);
+            localMemos.push({ id: newId, title: defaultTitle, content: defaultContent, updated_at: new Date() });
             loadMemo(newId);
             fetchMemoList();
         };
@@ -388,14 +356,9 @@
                     year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
                 })
             }));
-
             renderMemoList(memos);
-
-            if (loadFirst && memos.length > 0) {
-                loadMemo(memos[0].id);
-            } else if (loadFirst && memos.length === 0) {
-                window.newMemo();
-            }
+            if (loadFirst && memos.length > 0) loadMemo(memos[0].id);
+            else if (loadFirst && memos.length === 0) window.newMemo();
         };
 
         const renderMemoList = (memos) => {
@@ -450,10 +413,12 @@
             overflow: hidden;
             letter-spacing: 2px;
         }
+        /* 主屏幕扫描线效果 */
         .crt-screen::after {
             content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
             background: repeating-linear-gradient(to bottom, transparent 0, transparent 1px, rgba(0, 0, 0, 0.4) 1px, rgba(0, 0, 0, 0.4) 3px);
             mix-blend-mode: overlay; opacity: 0.6;
+            z-index: 5;
         }
         .crt-textarea {
             background: transparent; color: inherit; resize: none; width: 100%; height: 100%; border: none; outline: none;
@@ -471,17 +436,53 @@
         .key-row div:hover { background-color: #e5e7eb; }
         .key-row div:active, .key-pressed { transform: translateY(2px); box-shadow: 0 2px 0 0 #57534e !important, inset 0 1px 0 0 #f9fafb !important; background-color: #c0c2c5 !important; }
         .key-row .letter-key { font-size: 0.875rem; font-weight: 700; }
+        
+        /* --- 弹窗警告页面增强效果 --- */
+        #confirm-view { 
+            background-color: rgba(1, 23, 23, 0.9); 
+            z-index: 50; 
+            /* 1. 添加弹窗层内发光 */
+            box-shadow: inset 0 0 30px rgba(64, 224, 208, 0.6); 
+            position: absolute;
+            inset: 0;
+        }
+
+        /* 2. 弹窗页面的条纹效果 */
+        #confirm-view::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0,
+                transparent 1px,
+                rgba(0, 0, 0, 0.4) 1px, 
+                rgba(0, 0, 0, 0.4) 3px
+            );
+            opacity: 0.6;
+            mix-blend-mode: overlay;
+            z-index: 100;
+        }
+
+        .confirm-window { 
+            background-color: #011717; 
+            border: 2px solid #40E0D0; 
+            box-shadow: none; 
+            z-index: 60;
+            position: relative;
+        }
+
         .confirm-button { box-shadow: none !important; transform: none !important; border-radius: 0; background-color: #011717; border: 1px solid transparent; font-family: 'VT323', 'Noto Sans SC', monospace; font-size: 1.1rem; font-weight: 700; letter-spacing: 1px; padding: 4px 8px; cursor: pointer; text-align: center; transition: background-color 0.1s; color: #FFFFFF !important; }
         #confirm-yes { background-color: #B91C1C; border-color: #B91C1C; }
         #confirm-no { background-color: #0E7490; border-color: #0E7490; }
         #confirm-yes:hover { background-color: #DC2626; }
         #confirm-no:hover { background-color: #22D3EE; }
-        #confirm-view { background-color: rgba(1, 23, 23, 0.95); z-index: 10; }
-        .confirm-window { background-color: #011717; border: 3px solid #40E0D0; box-shadow: 0 0 15px rgba(64, 224, 208, 0.8); }
     </style>
 </head>
 <body class="p-4 sm:p-8 flex justify-center items-start min-h-screen">
     <div class="w-full max-w-4xl space-y-6">
+        <!-- 主机/显示器单元 -->
         <div class="bg-stone-200 p-6 sm:p-8 rounded-retro border-4 border-stone-400 relative">
             <div class="bg-stone-400 p-3 sm:p-4 rounded-lg shadow-inner border-2 border-stone-500">
                 <div class="crt-screen w-full h-[300px] sm:h-[400px]">
@@ -492,7 +493,7 @@
                             <div class="border-t border-cyan-800 mt-2 mb-2 flex-shrink-0"></div>
                             <textarea id="memo-content" placeholder="请在此输入文本... " class="crt-textarea flex-grow mt-4"></textarea>
                             <div class="flex-shrink-0 mt-2 flex justify-between text-sm">
-                                <span id="memo-id-display">> [ ID: loading... ]</span>
+                                <span id="memo-id-display">> [ ID: MEMORY-LOCAL ]</span>
                                 <span class="cursor-pointer hover:underline text-cyan-500" onclick="window.openFileManager()">[文件管理]</span>
                             </div>
                         </div>
@@ -500,7 +501,7 @@
                         <div id="manager-view" class="hidden w-full h-full absolute inset-0 p-6 flex flex-col justify-between">
                             <h2 class="manager-text text-cyan-500 mb-4 border-b border-cyan-800 pb-2">>>> FILE MANAGER V1.0</h2>
                             <div id="memo-list" class="flex-grow overflow-y-auto border border-cyan-700 p-2 mb-4 h-full max-h-4/5">
-                                <p class="text-cyan-500 font-mono p-2">>>> 正在加载文件列表...</p>
+                                <p class="text-cyan-500 font-mono p-2">>>> 正在扫描内存...</p>
                             </div>
                             <div class="flex-shrink-0 flex space-x-2 mt-4">
                                 <span onclick="window.newMemo()" class="cursor-pointer hover:bg-cyan-700 p-1 bg-cyan-900 text-white w-1/2 text-center">[新建文档]</span>
@@ -509,8 +510,7 @@
                         </div>
                         <!-- 3. 屏幕内部确认弹窗 -->
                         <div id="confirm-view" class="hidden absolute inset-0 p-6 flex flex-col justify-center items-center">
-                            <div class="absolute inset-0 bg-black opacity-80"></div> 
-                            <div class="confirm-window w-full max-w-sm p-6 text-center z-10 relative">
+                            <div class="confirm-window w-full max-w-sm p-6 text-center">
                                 <h3 class="manager-text text-cyan-400 mb-4 border-b border-cyan-700 pb-2">>>> 警告 (WARNING)</h3>
                                 <p id="confirm-message" class="text-cyan-300 font-mono text-base mb-6"></p>
                                 <div class="flex space-x-4">
@@ -530,6 +530,7 @@
                 </div>
             </div>
         </div>
+        <!-- 键盘单元 -->
         <div class="bg-stone-200 p-4 sm:p-6 rounded-retro border-4 border-stone-400 mt-6">
             <div class="text-stone-700 text-sm mb-3"><span class="font-mono">KEYBOARD UNIT</span><span class="float-right text-xs">READY</span></div>
             <div class="space-y-1">
