@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>复古电脑备忘录 - 存档确认版</title>
+    <title>复古电脑备忘录 - 机械音效版</title>
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Inter 字体和 VT323 字体 -->
@@ -12,7 +12,7 @@
     <script type="module">
         /**
          * 复古电脑持久化系统 + 深度定制电源及弹窗系统
-         * 修复：中文输入法兼容性与默认命名规则
+         * 增强：Web Audio API 实时合成机械键盘音效
          */
 
         const STORAGE_KEY = "motherPlanet_000765_log";
@@ -21,6 +21,9 @@
         let activeMemoId = null;
         let isPowerOn = localStorage.getItem(POWER_KEY) !== 'off'; 
         let isTransitioning = false;
+
+        // 音频上下文
+        let audioCtx = null;
 
         const memoTitleInput = () => document.getElementById('memo-title');
         const memoContentTextarea = () => document.getElementById('memo-content');
@@ -32,7 +35,6 @@
         const powerOverlay = document.getElementById('power-overlay');
         const powerLoadingText = document.getElementById('power-loading-text');
         
-        // 弹窗元素
         const confirmViewElement = document.getElementById('confirm-view');
         const confirmMessageElement = document.getElementById('confirm-message');
         const confirmYesButton = document.getElementById('confirm-yes');
@@ -55,6 +57,55 @@
             'PrintScreen': 'Key_PRINT'
         };
 
+        // --- 机械键盘音效合成引擎 ---
+        const playMechSound = (type = 'default') => {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const now = audioCtx.currentTime;
+            
+            // 1. 高频点击声 (Click)
+            const clickOsc = audioCtx.createOscillator();
+            const clickGain = audioCtx.createGain();
+            clickOsc.type = 'sine';
+            clickOsc.frequency.setValueAtTime(type === 'heavy' ? 800 : 1200 + Math.random() * 400, now);
+            clickGain.gain.setValueAtTime(0.15, now);
+            clickGain.gain.exponentialRampToValueAtTime(0.01, now + 0.03);
+            clickOsc.connect(clickGain);
+            clickGain.connect(audioCtx.destination);
+            clickOsc.start(now);
+            clickOsc.stop(now + 0.05);
+
+            // 2. 机械撞击底噪 (Thump)
+            const thumpOsc = audioCtx.createOscillator();
+            const thumpGain = audioCtx.createGain();
+            thumpOsc.type = 'triangle';
+            thumpOsc.frequency.setValueAtTime(type === 'heavy' ? 100 : 150 + Math.random() * 50, now);
+            thumpGain.gain.setValueAtTime(0.1, now);
+            thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            thumpOsc.connect(thumpGain);
+            thumpGain.connect(audioCtx.destination);
+            thumpOsc.start(now);
+            thumpOsc.stop(now + 0.1);
+
+            // 3. 释放噪声 (Release noise)
+            const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.02, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < noiseBuffer.length; i++) output[i] = Math.random() * 2 - 1;
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = noiseBuffer;
+            const noiseGain = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.value = 2000;
+            noiseGain.gain.setValueAtTime(0.03, now);
+            noiseGain.gain.linearRampToValueAtTime(0, now + 0.02);
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(audioCtx.destination);
+            noise.start(now);
+        };
+
         // --- 核心电源控制逻辑 ---
         window.togglePower = async () => {
             if (isTransitioning) return;
@@ -62,15 +113,14 @@
             
             const pwrBtn = document.getElementById('Key_PWR');
             pwrBtn.classList.add('key-pressed');
+            playMechSound('heavy'); // 电源键厚重音效
 
             if (isPowerOn) {
                 setStatus("SHUTDOWN SEQUENCE...");
                 powerOverlay.style.opacity = '1';
                 powerOverlay.classList.remove('hidden');
                 powerOverlay.style.backgroundColor = 'rgba(1, 23, 23, 0.7)'; 
-                
                 await animatePowerText("SHUTTING DOWN SYSTEM...");
-                
                 isPowerOn = false;
                 localStorage.setItem(POWER_KEY, 'off');
                 powerOverlay.style.backgroundColor = '#011717'; 
@@ -82,12 +132,9 @@
                 powerOverlay.classList.remove('hidden');
                 powerOverlay.style.backgroundColor = '#011717';
                 powerLoadingText.innerHTML = "";
-                
                 await animatePowerText("SYSTEM STARTUP INITIALIZING...");
-                
                 isPowerOn = true;
                 localStorage.setItem(POWER_KEY, 'on');
-                
                 powerOverlay.style.opacity = '0'; 
                 setTimeout(() => {
                     powerOverlay.classList.add('hidden');
@@ -108,6 +155,7 @@
                 powerLoadingText.innerHTML = "";
                 const interval = setInterval(() => {
                     powerLoadingText.innerHTML = "> " + text.substring(0, i) + (i % 2 === 0 ? "_" : " ");
+                    playMechSound(); // 打字机效果
                     i++;
                     if (i > text.length) {
                         clearInterval(interval);
@@ -161,7 +209,6 @@
                 const CANVAS_HEIGHT = lines.length * LINE_HEIGHT + PADDING * 2 + LINE_HEIGHT * 2;
                 canvas.width = CANVAS_WIDTH;
                 canvas.height = CANVAS_HEIGHT;
-
                 ctx.fillStyle = BACKGROUND_COLOR; 
                 ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; 
@@ -200,7 +247,6 @@
                 ctx.lineWidth = BORDER_THICKNESS;
                 ctx.strokeStyle = BORDER_COLOR;
                 ctx.strokeRect(BORDER_THICKNESS / 2, BORDER_THICKNESS / 2, CANVAS_WIDTH - BORDER_THICKNESS, CANVAS_HEIGHT - BORDER_THICKNESS);
-
                 const imageURL = canvas.toDataURL('image/png');
                 const downloadLink = document.createElement('a');
                 downloadLink.href = imageURL;
@@ -219,8 +265,8 @@
             if (!isPowerOn) return;
             confirmMessageElement.textContent = message;
             confirmViewElement.classList.remove('hidden');
-            confirmYesButton.onclick = () => { confirmViewElement.classList.add('hidden'); onConfirm(true); };
-            confirmNoButton.onclick = () => { confirmViewElement.classList.add('hidden'); onConfirm(false); };
+            confirmYesButton.onclick = () => { playMechSound('heavy'); confirmViewElement.classList.add('hidden'); onConfirm(true); };
+            confirmNoButton.onclick = () => { playMechSound(); confirmViewElement.classList.add('hidden'); onConfirm(false); };
         };
 
         // --- 持久化逻辑 ---
@@ -248,6 +294,7 @@
 
         const setUiMode = (mode) => {
             if (!isPowerOn || !confirmViewElement.classList.contains('hidden')) return;
+            playMechSound('heavy');
             if (mode === 'memo') {
                 memoViewElement.classList.remove('hidden');
                 managerViewElement.classList.add('hidden');
@@ -262,6 +309,11 @@
         // 输入处理
         window.typeKey = (char) => {
             if (!isPowerOn || isTransitioning || !confirmViewElement.classList.contains('hidden')) return;
+            
+            // 触发音效
+            if (['ENTER', 'BACK', 'SPACEBAR'].includes(char)) playMechSound('heavy');
+            else playMechSound();
+
             const activeEl = document.activeElement;
             const target = (activeEl === memoTitleInput() || activeEl === memoContentTextarea()) ? activeEl : memoContentTextarea();
             if (!target || !managerViewElement.classList.contains('hidden')) return;
@@ -288,9 +340,12 @@
             } else if (char === 'TAB') {
                 newValue = value.substring(0, start) + '    ' + value.substring(end);
                 newCursorPosition = start + 4;
-            } else if (!['SHIFT', 'CTRL', 'ALT', 'PRINT'].includes(char)) {
+            } else if (!['SHIFT', 'CTRL', 'ALT', 'PRINT', 'SPACEBAR'].includes(char)) {
                 newValue = value.substring(0, start) + char + value.substring(end);
                 newCursorPosition = start + char.length;
+            } else if (char === 'SPACEBAR') {
+                newValue = value.substring(0, start) + ' ' + value.substring(end);
+                newCursorPosition = start + 1;
             }
             target.value = newValue;
             target.selectionStart = target.selectionEnd = newCursorPosition;
@@ -362,7 +417,6 @@
         window.newMemo = () => {
             if (!isPowerOn || !confirmViewElement.classList.contains('hidden')) return;
             const newId = crypto.randomUUID();
-            // 核心修复：更新默认文件标题
             const defaultTitle = `新建备忘录 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`;
             localMemos.push({ id: newId, title: defaultTitle, content: "", updated_at: new Date() });
             syncToDisk();
@@ -390,9 +444,11 @@
                 if (virtualKeyId) document.getElementById(virtualKeyId)?.classList.add('key-pressed');
                 if (!isPowerOn) return;
                 
-                // 核心修复：防止拼音输入法模式下拦截 Backspace 导致无法删除拼音字符
-                if (e.isComposing || e.keyCode === 229) return;
+                // 输入音效
+                if (e.code === 'Space' || e.code === 'Enter' || e.code === 'Backspace') playMechSound('heavy');
+                else playMechSound();
 
+                if (e.isComposing || e.keyCode === 229) return;
                 if (e.code === 'PrintScreen') { e.preventDefault(); window.exportMemoAsImage(); }
                 const activeEl = document.activeElement;
                 if (['Backspace', 'Enter', 'Tab'].includes(e.code) && (activeEl === memoContentTextarea() || activeEl === memoTitleInput())) {
@@ -532,7 +588,7 @@
         </div>
 
         <div class="bg-stone-200 p-4 sm:p-6 rounded-retro border-4 border-stone-400 mt-6">
-            <div class="text-stone-700 text-sm mb-3 font-mono">KEYBOARD UNIT - ACTIVE</div>
+            <div class="text-stone-700 text-sm mb-3 font-mono">KEYBOARD UNIT - AUDIO FEEDBACK ENABLED</div>
             <div class="space-y-1">
                 <div class="flex space-x-1 key-row">
                     <div class="rounded-sm bg-gray-600 text-gray-300">ESC</div>
@@ -549,7 +605,7 @@
                     <div id="Key_SHIFT_L" onclick="typeKey('SHIFT')">SHIFT</div><div id="Key_A" class="letter-key" onclick="typeKey('A')">A</div><div id="Key_S" class="letter-key" onclick="typeKey('S')">S</div><div id="Key_D" class="letter-key" onclick="typeKey('D')">D</div><div id="Key_F" class="letter-key" onclick="typeKey('F')">F</div><div id="Key_G" class="letter-key" onclick="typeKey('G')">G</div><div id="Key_H" class="letter-key" onclick="typeKey('H')">H</div><div id="Key_J" class="letter-key" onclick="typeKey('J')">J</div><div id="Key_K" class="letter-key" onclick="typeKey('K')">K</div><div id="Key_L" class="letter-key" onclick="typeKey('L')">L</div><div id="Key_Semicolon" onclick="typeKey(';')">;</div><div id="Key_Quote" onclick="typeKey('\'')">"</div>
                 </div>
                 <div class="flex space-x-1 key-row">
-                    <div id="Key_CTRL_L" onclick="typeKey('CTRL')">CTRL</div><div id="Key_ALT_L" onclick="typeKey('ALT')">ALT</div><div id="Key_Z" class="letter-key" onclick="typeKey('Z')">Z</div><div id="Key_X" class="letter-key" onclick="typeKey('X')">X</div><div id="Key_C" class="letter-key" onclick="typeKey('C')">C</div><div id="Key_V" class="letter-key" onclick="typeKey('V')">V</div><div id="Key_B" class="letter-key" onclick="typeKey('B')">B</div><div id="Key_N" class="letter-key" onclick="typeKey('N')">N</div><div id="Key_M" class="letter-key" onclick="typeKey('M')">M</div><div id="Key_Comma" onclick="typeKey(',')">,</div><div id="Key_Period" onclick="typeKey('.')">.</div><div id="Key_Slash" onclick="typeKey('/')">/</div><div id="Key_SPACEBAR" class="bg-gray-400" onclick="typeKey(' ')">SPACEBAR</div><div id="Key_PRINT" onclick="window.exportMemoAsImage()">PRINT</div>
+                    <div id="Key_CTRL_L" onclick="typeKey('CTRL')">CTRL</div><div id="Key_ALT_L" onclick="typeKey('ALT')">ALT</div><div id="Key_Z" class="letter-key" onclick="typeKey('Z')">Z</div><div id="Key_X" class="letter-key" onclick="typeKey('X')">X</div><div id="Key_C" class="letter-key" onclick="typeKey('C')">C</div><div id="Key_V" class="letter-key" onclick="typeKey('V')">V</div><div id="Key_B" class="letter-key" onclick="typeKey('B')">B</div><div id="Key_N" class="letter-key" onclick="typeKey('N')">N</div><div id="Key_M" class="letter-key" onclick="typeKey('M')">M</div><div id="Key_Comma" onclick="typeKey(',')">,</div><div id="Key_Period" onclick="typeKey('.')">.</div><div id="Key_Slash" onclick="typeKey('/')">/</div><div id="Key_SPACEBAR" class="bg-gray-400" onclick="typeKey('SPACEBAR')">SPACEBAR</div><div id="Key_PRINT" onclick="window.exportMemoAsImage()">PRINT</div>
                 </div>
             </div>
         </div>
