@@ -314,14 +314,14 @@
             const savedData = loadFromDisk();
             if (savedData && savedData.length > 0) {
                 localMemos = savedData;
-                setStatus("存档已从母星终端成功载入。");
+                setStatus("存档已从终端成功载入。");
             } else {
                 // 如果没有存档，创建初始任务日志
                 const initId = crypto.randomUUID();
                 localMemos = [{
                     id: initId,
-                    title: "母星000765号任务：初始化",
-                    content: ">>> 系统启动中...\n>>> 连接建立...\n>>> 正在等待任务指令...",
+                    title: "新建备忘录",
+                    content: "请在此输入文本...",
                     updated_at: new Date()
                 }];
                 syncToDisk();
