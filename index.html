@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>复古电脑备忘录 - 电源交互版</title>
+    <title>复古电脑备忘录 - 存档确认版</title>
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Inter 字体和 VT323 字体 -->
@@ -11,8 +11,8 @@
     
     <script type="module">
         /**
-         * 复古电脑持久化系统 + 简化版电源管理（淡出启动版）
-         * 修复：支持标题栏与内容区的动态焦点切换输入
+         * 复古电脑持久化系统 + 深度定制电源及弹窗系统
+         * 修复：中文输入法兼容性与默认命名规则
          */
 
         const STORAGE_KEY = "motherPlanet_000765_log";
@@ -31,6 +31,12 @@
         const memoIdDisplayElement = document.getElementById('memo-id-display');
         const powerOverlay = document.getElementById('power-overlay');
         const powerLoadingText = document.getElementById('power-loading-text');
+        
+        // 弹窗元素
+        const confirmViewElement = document.getElementById('confirm-view');
+        const confirmMessageElement = document.getElementById('confirm-message');
+        const confirmYesButton = document.getElementById('confirm-yes');
+        const confirmNoButton = document.getElementById('confirm-no');
         
         const KEY_MAP = {
             'Backquote': 'Key_Backquote', 'Digit1': 'Key_1', 'Digit2': 'Key_2', 'Digit3': 'Key_3', 'Digit4': 'Key_4',
@@ -83,7 +89,6 @@
                 localStorage.setItem(POWER_KEY, 'on');
                 
                 powerOverlay.style.opacity = '0'; 
-                
                 setTimeout(() => {
                     powerOverlay.classList.add('hidden');
                     initApp(); 
@@ -113,6 +118,112 @@
             });
         };
 
+        // --- 图片导出功能 ---
+        window.exportMemoAsImage = () => {
+            if (!isPowerOn || isTransitioning || !confirmViewElement.classList.contains('hidden')) return;
+            const textarea = memoContentTextarea();
+            if (!textarea || managerViewElement.classList.contains('hidden') === false) {
+                setStatus("请先在备忘录视图中编辑内容。");
+                return;
+            }
+            const content = textarea.value;
+            const title = memoTitleInput().value || "未命名";
+            try {
+                const now = new Date();
+                const TIMESTAMP = now.toLocaleString('zh-CN', {
+                        year: 'numeric', month: '2-digit', day: '2-digit',
+                        hour: '2-digit', minute: '2-digit', hour12: false
+                    }).replace(/\//g, '-').replace(',', '');
+                const CANVAS_WIDTH = 800;
+                const LINE_HEIGHT = 30;
+                const PADDING = 30;
+                const FONT_SIZE = '22px';
+                const FONT_FAMILY = '"VT323", "Noto Sans SC", monospace';
+                const TEXT_COLOR = '#40E0D0'; 
+                const BACKGROUND_COLOR = '#011717'; 
+                const BORDER_THICKNESS = 2; 
+                const BORDER_COLOR = '#40E0D0'; 
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.font = `700 ${FONT_SIZE} ${FONT_FAMILY}`;
+                const MAX_CHARS_PER_LINE = 33; 
+                let lines = [];
+                const rawLines = content.split('\n');
+                for (const rawLine of rawLines) {
+                    if (rawLine === '') { lines.push(''); continue; }
+                    let start = 0;
+                    while (start < rawLine.length) {
+                        let end = Math.min(start + MAX_CHARS_PER_LINE, rawLine.length);
+                        lines.push(rawLine.substring(start, end));
+                        start = end;
+                    }
+                }
+                const CANVAS_HEIGHT = lines.length * LINE_HEIGHT + PADDING * 2 + LINE_HEIGHT * 2;
+                canvas.width = CANVAS_WIDTH;
+                canvas.height = CANVAS_HEIGHT;
+
+                ctx.fillStyle = BACKGROUND_COLOR; 
+                ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; 
+                for (let i = 0; i < CANVAS_HEIGHT; i += 3) { ctx.fillRect(0, i + 1, CANVAS_WIDTH, 2); }
+                ctx.font = `700 24px ${FONT_FAMILY}`;
+                ctx.fillStyle = TEXT_COLOR; 
+                ctx.shadowColor = 'rgba(64, 224, 208, 0.8)';
+                ctx.shadowBlur = 2;
+                ctx.fillText(`>>> ${title} <<<`, PADDING, PADDING + LINE_HEIGHT * 0.75);
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = '#00CED1';
+                ctx.beginPath();
+                ctx.moveTo(PADDING, PADDING + LINE_HEIGHT + 5);
+                ctx.lineTo(CANVAS_WIDTH - PADDING, PADDING + LINE_HEIGHT + 5);
+                ctx.stroke();
+                ctx.font = `700 ${FONT_SIZE} ${FONT_FAMILY}`;
+                ctx.fillStyle = TEXT_COLOR; 
+                let y = PADDING + LINE_HEIGHT * 2 + 10;
+                for (const line of lines) {
+                    ctx.shadowColor = 'rgba(64, 224, 208, 1)';
+                    ctx.shadowBlur = 3;
+                    ctx.fillText(line, PADDING, y);
+                    ctx.shadowBlur = 0;
+                    y += LINE_HEIGHT;
+                }
+                const TIMESTAMP_Y = CANVAS_HEIGHT - PADDING;
+                const TIMESTAMP_X = CANVAS_WIDTH - PADDING;
+                ctx.font = `700 20px ${FONT_FAMILY}`; 
+                ctx.fillStyle = TEXT_COLOR; 
+                ctx.shadowColor = 'rgba(64, 224, 208, 1)';
+                ctx.shadowBlur = 3;
+                ctx.textAlign = 'right';
+                ctx.fillText(TIMESTAMP, TIMESTAMP_X, TIMESTAMP_Y);
+                ctx.textAlign = 'left';
+                ctx.shadowBlur = 0;
+                ctx.lineWidth = BORDER_THICKNESS;
+                ctx.strokeStyle = BORDER_COLOR;
+                ctx.strokeRect(BORDER_THICKNESS / 2, BORDER_THICKNESS / 2, CANVAS_WIDTH - BORDER_THICKNESS, CANVAS_HEIGHT - BORDER_THICKNESS);
+
+                const imageURL = canvas.toDataURL('image/png');
+                const downloadLink = document.createElement('a');
+                downloadLink.href = imageURL;
+                downloadLink.download = `LOG_${TIMESTAMP}.png`;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                setStatus(`图片 [${title}] 映射导出成功。`);
+            } catch (e) {
+                setStatus(`!!! 导出失败: ${e.message}`);
+            }
+        };
+
+        // --- 确认弹窗逻辑 ---
+        window.showConfirm = (message, onConfirm) => {
+            if (!isPowerOn) return;
+            confirmMessageElement.textContent = message;
+            confirmViewElement.classList.remove('hidden');
+            confirmYesButton.onclick = () => { confirmViewElement.classList.add('hidden'); onConfirm(true); };
+            confirmNoButton.onclick = () => { confirmViewElement.classList.add('hidden'); onConfirm(false); };
+        };
+
+        // --- 持久化逻辑 ---
         const syncToDisk = () => {
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(localMemos));
@@ -136,7 +247,7 @@
         };
 
         const setUiMode = (mode) => {
-            if (!isPowerOn) return;
+            if (!isPowerOn || !confirmViewElement.classList.contains('hidden')) return;
             if (mode === 'memo') {
                 memoViewElement.classList.remove('hidden');
                 managerViewElement.classList.add('hidden');
@@ -148,16 +259,11 @@
             }
         };
 
-        // --- 修复后的输入函数 ---
+        // 输入处理
         window.typeKey = (char) => {
-            if (!isPowerOn || isTransitioning) return;
-            
-            // 获取当前焦点元素，如果不在标题也不在内容区，默认指向内容区
+            if (!isPowerOn || isTransitioning || !confirmViewElement.classList.contains('hidden')) return;
             const activeEl = document.activeElement;
-            const target = (activeEl === memoTitleInput() || activeEl === memoContentTextarea()) 
-                           ? activeEl 
-                           : memoContentTextarea();
-
+            const target = (activeEl === memoTitleInput() || activeEl === memoContentTextarea()) ? activeEl : memoContentTextarea();
             if (!target || !managerViewElement.classList.contains('hidden')) return;
             
             const start = target.selectionStart;
@@ -175,7 +281,6 @@
                     newCursorPosition = start - 1;
                 }
             } else if (char === 'ENTER') {
-                // 标题栏不允许换行
                 if (target !== memoTitleInput()) {
                     newValue = value.substring(0, start) + '\n' + value.substring(end);
                     newCursorPosition = start + 1;
@@ -187,7 +292,6 @@
                 newValue = value.substring(0, start) + char + value.substring(end);
                 newCursorPosition = start + char.length;
             }
-            
             target.value = newValue;
             target.selectionStart = target.selectionEnd = newCursorPosition;
             target.focus();
@@ -203,12 +307,7 @@
                     const contentTextarea = memoContentTextarea();
                     if (contentTextarea && titleInput && activeMemoId) {
                         const index = localMemos.findIndex(m => m.id === activeMemoId);
-                        const data = { 
-                            id: activeMemoId, 
-                            content: contentTextarea.value, 
-                            title: titleInput.value || '未命名', 
-                            updated_at: new Date() 
-                        };
+                        const data = { id: activeMemoId, content: contentTextarea.value, title: titleInput.value || '未命名', updated_at: new Date() };
                         if (index > -1) localMemos[index] = data; else localMemos.push(data);
                         syncToDisk();
                         setStatus(`SYNC OK: [${data.title}]`);
@@ -218,7 +317,7 @@
         })();
 
         const loadMemo = (memoId) => {
-            if (!isPowerOn) return;
+            if (!isPowerOn || !confirmViewElement.classList.contains('hidden')) return;
             activeMemoId = memoId;
             const memo = localMemos.find(m => m.id === memoId);
             if (memo) {
@@ -245,9 +344,13 @@
                 delBtn.textContent = '[X]';
                 delBtn.onclick = (e) => {
                     e.stopPropagation();
-                    localMemos = localMemos.filter(m => m.id !== memo.id);
-                    syncToDisk();
-                    fetchMemoList(activeMemoId === memo.id);
+                    window.showConfirm(`>>> 确认删除文档: "${memo.title}" 吗?`, (confirmed) => {
+                        if (confirmed) {
+                            localMemos = localMemos.filter(m => m.id !== memo.id);
+                            syncToDisk();
+                            fetchMemoList(activeMemoId === memo.id);
+                        }
+                    });
                 };
                 item.append(titleSpan, delBtn);
                 memoListElement.appendChild(item);
@@ -257,14 +360,11 @@
         };
 
         window.newMemo = () => {
-            if (!isPowerOn) return;
+            if (!isPowerOn || !confirmViewElement.classList.contains('hidden')) return;
             const newId = crypto.randomUUID();
-            localMemos.push({ 
-                id: newId, 
-                title: `新建备忘录 ${new Date().toLocaleTimeString('zh-CN')}`,
-                content: "",
-                updated_at: new Date()
-            });
+            // 核心修复：更新默认文件标题
+            const defaultTitle = `新建备忘录 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`;
+            localMemos.push({ id: newId, title: defaultTitle, content: "", updated_at: new Date() });
             syncToDisk();
             loadMemo(newId);
             fetchMemoList();
@@ -290,17 +390,17 @@
                 if (virtualKeyId) document.getElementById(virtualKeyId)?.classList.add('key-pressed');
                 if (!isPowerOn) return;
                 
-                // 处理 Backspace, Enter, Tab 拦截逻辑，确保对标题栏也生效
+                // 核心修复：防止拼音输入法模式下拦截 Backspace 导致无法删除拼音字符
+                if (e.isComposing || e.keyCode === 229) return;
+
+                if (e.code === 'PrintScreen') { e.preventDefault(); window.exportMemoAsImage(); }
                 const activeEl = document.activeElement;
-                if (['Backspace', 'Enter', 'Tab'].includes(e.code) && 
-                    (activeEl === memoContentTextarea() || activeEl === memoTitleInput())) {
+                if (['Backspace', 'Enter', 'Tab'].includes(e.code) && (activeEl === memoContentTextarea() || activeEl === memoTitleInput())) {
                     e.preventDefault();
                     window.typeKey(e.code === 'Backspace' ? 'BACK' : e.code.toUpperCase());
                 }
             });
-            document.addEventListener('keyup', (e) => {
-                document.getElementById(KEY_MAP[e.code])?.classList.remove('key-pressed');
-            });
+            document.addEventListener('keyup', (e) => { document.getElementById(KEY_MAP[e.code])?.classList.remove('key-pressed'); });
             initApp();
         };
         window.openFileManager = () => setUiMode('manager');
@@ -324,7 +424,7 @@
         .crt-screen::after {
             content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
             background: repeating-linear-gradient(to bottom, transparent 0, transparent 1px, rgba(0, 0, 0, 0.4) 1px, rgba(0, 0, 0, 0.4) 3px);
-            mix-blend-mode: overlay; opacity: 0.6; z-index: 100;
+            mix-blend-mode: overlay; opacity: 0.6; z-index: 50;
         }
         .crt-textarea {
             background: transparent; color: inherit; resize: none; width: 100%; height: 100%; border: none; outline: none;
@@ -340,11 +440,38 @@
         .key-row div { flex-grow: 1; height: 28px; background-color: #d1d5db; border-radius: 4px; box-shadow: 0 4px 0 0 #57534e; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; color: #44403c; }
         .key-row div:active, .key-pressed { transform: translateY(2px); box-shadow: 0 2px 0 0 #57534e !important; background-color: #c0c2c5 !important; }
         
-        #power-overlay { 
-            z-index: 80; 
-            transition: opacity 0.5s ease-out, background-color 0.3s ease; 
-        }
+        #power-overlay { z-index: 100; transition: opacity 0.5s ease-out, background-color 0.3s ease; }
         #power-loading-text { font-family: 'VT323', monospace; font-size: 1.5rem; color: #40E0D0; text-shadow: 0 0 5px #40E0D0; }
+
+        #confirm-view { 
+            background-color: rgba(1, 23, 23, 0.9); 
+            z-index: 150; 
+            box-shadow: inset 0 0 30px rgba(64, 224, 208, 0.6); 
+            position: absolute;
+            inset: 0;
+        }
+
+        #confirm-view::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            background: repeating-linear-gradient(to bottom, transparent 0, transparent 1px, rgba(0, 0, 0, 0.4) 1px, rgba(0, 0, 0, 0.4) 3px);
+            opacity: 0.6; mix-blend-mode: overlay; z-index: 200;
+        }
+
+        .confirm-window { 
+            background-color: #011717; 
+            border: 2px solid #40E0D0; 
+            box-shadow: none; 
+            z-index: 160;
+            position: relative;
+        }
+
+        .confirm-button { box-shadow: none !important; transform: none !important; border-radius: 0; background-color: #011717; border: 1px solid transparent; font-family: 'VT323', 'Noto Sans SC', monospace; font-size: 1.1rem; font-weight: 700; letter-spacing: 1px; padding: 4px 8px; cursor: pointer; text-align: center; transition: background-color 0.1s; color: #FFFFFF !important; }
+        #confirm-yes { background-color: #B91C1C; border-color: #B91C1C; }
+        #confirm-no { background-color: #0E7490; border-color: #0E7490; }
+        #confirm-yes:hover { background-color: #DC2626; }
+        #confirm-no:hover { background-color: #22D3EE; }
+        .manager-text { font-family: 'VT323', 'Noto Sans SC', monospace; font-size: 20px; font-weight: 700; color: #00CED1; text-shadow: 0 0 2px rgba(0, 206, 209, 0.8); }
     </style>
 </head>
 <body class="p-4 sm:p-8 flex justify-center items-start min-h-screen">
@@ -354,12 +481,24 @@
                 <div class="crt-screen w-full h-[300px] sm:h-[400px]">
                     <div class="w-full h-full p-6 relative">
                         
-                        <!-- 电源遮罩 -->
+                        <!-- 1. 电源遮罩 -->
                         <div id="power-overlay" class="hidden absolute inset-0 flex flex-col justify-center items-center p-12">
                             <div id="power-loading-text" class="text-center"></div>
                         </div>
 
-                        <!-- 备忘录视图 -->
+                        <!-- 2. 确认删除弹窗 -->
+                        <div id="confirm-view" class="hidden absolute inset-0 p-6 flex flex-col justify-center items-center">
+                            <div class="confirm-window w-full max-w-sm p-6 text-center">
+                                <h3 class="manager-text text-cyan-400 mb-4 border-b border-cyan-700 pb-2">>>> 警告 (WARNING)</h3>
+                                <p id="confirm-message" class="text-cyan-300 font-mono text-base mb-6"></p>
+                                <div class="flex space-x-4">
+                                    <span id="confirm-yes" class="confirm-button w-1/2">[ 确认删除 ]</span>
+                                    <span id="confirm-no" class="confirm-button w-1/2">[ 取消 ]</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. 备忘录视图 -->
                         <div id="memo-view" class="w-full h-full flex flex-col">
                             <input id="memo-title" type="text" placeholder="任务日志标题..." class="crt-title-input w-full flex-shrink-0">
                             <div class="border-t border-cyan-800 mt-2 mb-2"></div>
@@ -370,9 +509,9 @@
                             </div>
                         </div>
 
-                        <!-- 文件管理 -->
+                        <!-- 4. 文件管理 -->
                         <div id="manager-view" class="hidden w-full h-full absolute inset-0 p-6 flex flex-col justify-between">
-                            <h2 class="text-xl text-cyan-500 mb-4 border-b border-cyan-800 pb-2">>>> DISK MANAGER V1.0</h2>
+                            <h2 class="manager-text text-cyan-500 mb-4 border-b border-cyan-800 pb-2">>>> DISK MANAGER V1.0</h2>
                             <div id="memo-list" class="flex-grow overflow-y-auto border border-cyan-700 p-2 mb-4"></div>
                             <div class="flex-shrink-0 flex space-x-2 mt-4">
                                 <span onclick="window.newMemo()" class="cursor-pointer hover:bg-cyan-700 p-1 bg-cyan-900 text-white w-1/2 text-center">[新建文档]</span>
@@ -404,13 +543,13 @@
                     <div id="Key_Backquote" onclick="typeKey('`')">~</div><div id="Key_1" onclick="typeKey('1')">1</div><div id="Key_2" onclick="typeKey('2')">2</div><div id="Key_3" onclick="typeKey('3')">3</div><div id="Key_4" onclick="typeKey('4')">4</div><div id="Key_5" onclick="typeKey('5')">5</div><div id="Key_6" onclick="typeKey('6')">6</div><div id="Key_7" onclick="typeKey('7')">7</div><div id="Key_8" onclick="typeKey('8')">8</div><div id="Key_9" onclick="typeKey('9')">9</div><div id="Key_0" onclick="typeKey('0')">0</div><div id="Key_Minus" onclick="typeKey('-')">-</div><div id="Key_Equal" onclick="typeKey('=')">=</div><div id="Key_BACK" onclick="typeKey('BACK')">BACK</div><div id="Key_ENTER" class="bg-cyan-700 text-white" onclick="typeKey('ENTER')">ENTER</div>
                 </div>
                 <div class="flex space-x-1 key-row">
-                    <div id="Key_TAB" onclick="typeKey('TAB')">TAB</div><div id="Key_Q" onclick="typeKey('Q')">Q</div><div id="Key_W" onclick="typeKey('W')">W</div><div id="Key_E" onclick="typeKey('E')">E</div><div id="Key_R" onclick="typeKey('R')">R</div><div id="Key_T" onclick="typeKey('T')">T</div><div id="Key_Y" onclick="typeKey('Y')">Y</div><div id="Key_U" onclick="typeKey('U')">U</div><div id="Key_I" onclick="typeKey('I')">I</div><div id="Key_O" onclick="typeKey('O')">O</div><div id="Key_P" onclick="typeKey('P')">P</div><div id="Key_BracketLeft" onclick="typeKey('[')">[</div><div id="Key_BracketRight" onclick="typeKey(']')">]</div><div id="Key_Backslash" onclick="typeKey('\\')">\</div>
+                    <div id="Key_TAB" onclick="typeKey('TAB')">TAB</div><div id="Key_Q" class="letter-key" onclick="typeKey('Q')">Q</div><div id="Key_W" class="letter-key" onclick="typeKey('W')">W</div><div id="Key_E" class="letter-key" onclick="typeKey('E')">E</div><div id="Key_R" class="letter-key" onclick="typeKey('R')">R</div><div id="Key_T" class="letter-key" onclick="typeKey('T')">T</div><div id="Key_Y" class="letter-key" onclick="typeKey('Y')">Y</div><div id="Key_U" class="letter-key" onclick="typeKey('U')">U</div><div id="Key_I" class="letter-key" onclick="typeKey('I')">I</div><div id="Key_O" class="letter-key" onclick="typeKey('O')">O</div><div id="Key_P" class="letter-key" onclick="typeKey('P')">P</div><div id="Key_BracketLeft" onclick="typeKey('[')">[</div><div id="Key_BracketRight" onclick="typeKey(']')">]</div><div id="Key_Backslash" onclick="typeKey('\\')">\</div>
                 </div>
                 <div class="flex space-x-1 key-row">
-                    <div id="Key_SHIFT_L" onclick="typeKey('SHIFT')">SHIFT</div><div id="Key_A" onclick="typeKey('A')">A</div><div id="Key_S" onclick="typeKey('S')">S</div><div id="Key_D" onclick="typeKey('D')">D</div><div id="Key_F" onclick="typeKey('F')">F</div><div id="Key_G" onclick="typeKey('G')">G</div><div id="Key_H" onclick="typeKey('H')">H</div><div id="Key_J" onclick="typeKey('J')">J</div><div id="Key_K" onclick="typeKey('K')">K</div><div id="Key_L" onclick="typeKey('L')">L</div><div id="Key_Semicolon" onclick="typeKey(';')">;</div><div id="Key_Quote" onclick="typeKey('\'')">"</div>
+                    <div id="Key_SHIFT_L" onclick="typeKey('SHIFT')">SHIFT</div><div id="Key_A" class="letter-key" onclick="typeKey('A')">A</div><div id="Key_S" class="letter-key" onclick="typeKey('S')">S</div><div id="Key_D" class="letter-key" onclick="typeKey('D')">D</div><div id="Key_F" class="letter-key" onclick="typeKey('F')">F</div><div id="Key_G" class="letter-key" onclick="typeKey('G')">G</div><div id="Key_H" class="letter-key" onclick="typeKey('H')">H</div><div id="Key_J" class="letter-key" onclick="typeKey('J')">J</div><div id="Key_K" class="letter-key" onclick="typeKey('K')">K</div><div id="Key_L" class="letter-key" onclick="typeKey('L')">L</div><div id="Key_Semicolon" onclick="typeKey(';')">;</div><div id="Key_Quote" onclick="typeKey('\'')">"</div>
                 </div>
                 <div class="flex space-x-1 key-row">
-                    <div id="Key_CTRL_L" onclick="typeKey('CTRL')">CTRL</div><div id="Key_ALT_L" onclick="typeKey('ALT')">ALT</div><div id="Key_Z" onclick="typeKey('Z')">Z</div><div id="Key_X" onclick="typeKey('X')">X</div><div id="Key_C" onclick="typeKey('C')">C</div><div id="Key_V" onclick="typeKey('V')">V</div><div id="Key_B" onclick="typeKey('B')">B</div><div id="Key_N" onclick="typeKey('N')">N</div><div id="Key_M" onclick="typeKey('M')">M</div><div id="Key_Comma" onclick="typeKey(',')">,</div><div id="Key_Period" onclick="typeKey('.')">.</div><div id="Key_Slash" onclick="typeKey('/')">/</div><div id="Key_SPACEBAR" class="bg-gray-400" onclick="typeKey(' ')">SPACEBAR</div><div id="Key_PRINT" onclick="setStatus('正在截屏...')">PRINT</div>
+                    <div id="Key_CTRL_L" onclick="typeKey('CTRL')">CTRL</div><div id="Key_ALT_L" onclick="typeKey('ALT')">ALT</div><div id="Key_Z" class="letter-key" onclick="typeKey('Z')">Z</div><div id="Key_X" class="letter-key" onclick="typeKey('X')">X</div><div id="Key_C" class="letter-key" onclick="typeKey('C')">C</div><div id="Key_V" class="letter-key" onclick="typeKey('V')">V</div><div id="Key_B" class="letter-key" onclick="typeKey('B')">B</div><div id="Key_N" class="letter-key" onclick="typeKey('N')">N</div><div id="Key_M" class="letter-key" onclick="typeKey('M')">M</div><div id="Key_Comma" onclick="typeKey(',')">,</div><div id="Key_Period" onclick="typeKey('.')">.</div><div id="Key_Slash" onclick="typeKey('/')">/</div><div id="Key_SPACEBAR" class="bg-gray-400" onclick="typeKey(' ')">SPACEBAR</div><div id="Key_PRINT" onclick="window.exportMemoAsImage()">PRINT</div>
                 </div>
             </div>
         </div>
